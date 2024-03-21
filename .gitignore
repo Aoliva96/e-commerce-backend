@@ -128,3 +128,9 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Extras
+package-lock.json
+.vscode
+.DS_Store
+project-requirements.md
