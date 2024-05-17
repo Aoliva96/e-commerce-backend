@@ -1,10 +1,13 @@
+// NOTE: Future development - overhaul error handling to be more reliable
+
 const router = require("express").Router();
 const { Category, Product } = require("../../models");
+const { formatAllCategories, formatSingleCategory } = require("./helpers");
 
 // Routes for /api/categories endpoint
 // ====================================
 
-// Find all categories & include associated products
+// Find all categories, include associated products
 router.get("/", async (req, res) => {
   try {
     const categories = await Category.findAll({
@@ -13,54 +16,12 @@ router.get("/", async (req, res) => {
     if (!categories) {
       res.status(404).json("Error: No categories found");
       console.error(`\x1b[33m[Error viewing all categories: Not found]\x1b[0m`);
-      return;
+      throw new Error("No categories found");
     }
     console.log(`\x1b[32m[Viewing all categories]\x1b[0m`);
-    // Format categories and associated products for console table
     res.status(200).json(categories);
-    function TableItem(
-      categories,
-      category_id,
-      products,
-      product_id,
-      prices,
-      stocks
-    ) {
-      this.categories = categories;
-      this.category_id = category_id;
-      this.products = products;
-      this.product_id = product_id;
-      this.prices = prices;
-      this.stocks = stocks;
-    }
-    const tableData = [];
-    categories.forEach((category) => {
-      if (category.products.length > 0) {
-        category.products.forEach((product) => {
-          tableData.push(
-            new TableItem(
-              category.category_name,
-              category.id,
-              product.product_name,
-              product.id,
-              product.price,
-              product.stock
-            )
-          );
-        });
-      } else {
-        tableData.push(
-          new TableItem(
-            category.category_name,
-            category.id,
-            "None",
-            "N/A",
-            "N/A",
-            "N/A"
-          )
-        );
-      }
-    });
+    // Call helper function to format output for console table
+    const tableData = formatAllCategories(categories);
     console.table(tableData);
   } catch (err) {
     res.status(500).json(err);
@@ -68,7 +29,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Find one category by id & include associated products
+// Find one category by id, include associated products
 router.get("/:id", async (req, res) => {
   try {
     const category = await Category.findOne({
@@ -78,46 +39,19 @@ router.get("/:id", async (req, res) => {
       include: [Product],
     });
     if (!category) {
-      res
-        .status(404)
-        .json(`Error: Could not find category with id ${req.params.id}`);
+      res.status(404).json(`Error: No category found with id ${req.params.id}`);
       console.error(
         `\x1b[31m[Error finding category with id ${req.params.id}: Not found]\x1b[0m`
       );
-      return;
+      throw new Error(`No category found with id ${req.params.id}`);
     }
     res.status(200).json(category);
     console.log(
       `\x1b[32m[Viewing category ${category.id}: ${category.category_name}]\x1b[0m`
     );
-
-    // Format products for console table, if any
-    if (category.products.length > 0) {
-      function TableItem(products, product_id, prices, stocks) {
-        this.products = products;
-        this.product_id = product_id;
-        this.prices = prices;
-        this.stocks = stocks;
-      }
-      const products = category.products.map((product) => product.product_name);
-      const productIds = category.products.map((product) => product.id);
-      const prices = category.products.map((product) => product.price);
-      const stocks = category.products.map((product) => product.stock);
-      const tableData = products.map(
-        (product, index) =>
-          new TableItem(
-            product,
-            productIds[index],
-            prices[index],
-            stocks[index]
-          )
-      );
-      console.table(tableData);
-    } else {
-      console.log(
-        `\x1b[33m[Currently no products in category ${category.id}]\x1b[0m`
-      );
-    }
+    // Call helper function to format output for console table
+    const tableData = formatSingleCategory(category);
+    console.table(tableData);
   } catch (err) {
     res.status(500).json(err);
     console.error(
@@ -126,7 +60,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create a new category
+// Create new category
 // req.body example: { "category_name": "Electronics" }
 router.post("/", async (req, res) => {
   try {
@@ -143,7 +77,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Update a category by id
+// Update category by id
 // req.body example: { "category_name": "Appliances" }
 router.put("/:id", async (req, res) => {
   try {
@@ -160,7 +94,7 @@ router.put("/:id", async (req, res) => {
       console.error(
         `\x1b[31m[Error updating category with id ${req.params.id}: Not found]\x1b[0m`
       );
-      return;
+      throw new Error(`No category found with id ${req.params.id}`);
     }
     // Update category name
     const newName = req.body.category_name;
@@ -189,7 +123,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete a category by id
+// Delete category by id
 router.delete("/:id", async (req, res) => {
   try {
     // Find category to delete
