@@ -1,4 +1,4 @@
-// NOTE: Future development - convert helper functions to class methods
+// NOTE: Future development - convert helper functions to classes
 
 // Formatting helper functions for console table data
 // ===================================================
@@ -41,7 +41,6 @@ function formatAllCategories(categories) {
       );
     }
   });
-  // Return formatted data
   return tableData;
 }
 
@@ -125,7 +124,6 @@ function formatAllProducts(products) {
       );
     }
   });
-  // Return formatted data
   return tableData;
 }
 
@@ -174,13 +172,81 @@ function formatSingleProduct(product) {
     );
     console.log(`\x1b[33m[Currently no tags for product ${product.id}]\x1b[0m`);
   }
-  // Return formatted data
   return tableData;
 }
 
+// Function for ALL tags and associated products
+function formatAllTags(tags) {
+  function TagTable(tag, t_id, product, p_id, price, stock) {
+    this.tag = tag;
+    this.t_id = t_id;
+    this.product = product;
+    this.p_id = p_id;
+    this.price = price;
+    this.stock = stock;
+  }
+  const tableData = [];
+  tags.forEach((tag) => {
+    if (tag.products.length > 0) {
+      tag.products.forEach((product) => {
+        tableData.push(
+          new TagTable(
+            tag.tag_name,
+            tag.id,
+            product.product_name,
+            product.id,
+            product.price,
+            product.stock
+          )
+        );
+      });
+    } else {
+      tableData.push(
+        new TagTable(tag.tag_name, tag.id, "None", "N/A", "N/A", "N/A")
+      );
+    }
+  });
+  return tableData;
+}
+
+// Function for SINGLE tag and associated products
+function formatSingleTag(tag) {
+  if (tag.products.length > 0) {
+    function TagTable(product, p_id, price, stock) {
+      this.product = product;
+      this.p_id = p_id;
+      this.price = price;
+      this.stock = stock;
+    }
+    const products = tag.products.map((product) => product.product_name);
+    const productIds = tag.products.map((product) => product.id);
+    const prices = tag.products.map((product) => product.price);
+    const stocks = tag.products.map((product) => product.stock);
+    const tableData = products.map(
+      (product, index) =>
+        new TagTable(product, productIds[index], prices[index], stocks[index])
+    );
+    return tableData;
+  } else {
+    const tableData = [
+      {
+        product: "None",
+        p_id: "N/A",
+        price: "N/A",
+        stock: "N/A",
+      },
+    ];
+    console.log(`\x1b[33m[Currently no products with tag ${tag.id}]\x1b[0m`);
+    return tableData;
+  }
+}
+
+// Export helper functions
 module.exports = {
   formatAllCategories,
   formatSingleCategory,
   formatAllProducts,
   formatSingleProduct,
+  formatAllTags,
+  formatSingleTag,
 };

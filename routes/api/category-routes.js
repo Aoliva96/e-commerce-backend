@@ -1,4 +1,4 @@
-// NOTE: Future development - overhaul error handling to be more reliable
+// NOTE: Future development - refactor error handling to be more reliable
 
 const router = require("express").Router();
 const { Category, Product } = require("../../models");
@@ -139,7 +139,7 @@ router.delete("/:id", async (req, res) => {
       console.error(
         `\x1b[31m[Error deleting category with id ${req.params.id}: Not found]\x1b[0m`
       );
-      return;
+      throw new Error(`No category found with id ${req.params.id}`);
     }
     // Delete category
     const deletedCategory = await Category.destroy({

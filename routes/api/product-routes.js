@@ -1,4 +1,5 @@
-// NOTE: Future development - overhaul error handling to be more reliable
+// NOTE: Future development - refactor error handling to be more reliable
+// NOTE: Create & Update routes are not yet working, response timeout, bulkCreate issue?
 
 const router = require("express").Router();
 const { Product, Category, Tag, ProductTag } = require("../../models");
@@ -143,6 +144,44 @@ router.put("/:id", (req, res) => {
 });
 
 // Delete product by id
-router.delete("/:id", (req, res) => {});
+router.delete("/:id", async (req, res) => {
+  try {
+    // Find product to delete
+    const product = await Product.findOne({
+      where: {
+        id: req.params.id,
+      },
+    });
+    if (!product) {
+      res
+        .status(404)
+        .json(`Error: Could not find product with id ${req.params.id}`);
+      console.error(
+        `\x1b[31m[Error deleting product with id ${req.params.id}: Not found]\x1b[0m`
+      );
+      throw new Error(`No product found with id ${req.params.id}`);
+    }
+    // Delete product
+    const deletedProduct = await Product.destroy({
+      where: {
+        id: product.id,
+      },
+    });
+    if (!deletedProduct) {
+      throw err;
+    }
+    res.status(200).json({
+      message: `Successfully deleted product ${req.params.id}, ${product.product_name}`,
+    });
+    console.log(
+      `\x1b[32m[Successfully deleted product ${req.params.id}: ${product.product_name}]\x1b[0m`
+    );
+  } catch (err) {
+    res.status(500).json(`${err}`);
+    console.error(
+      `\x1b[31m[Error deleting product with id ${req.params.id}: ${err.name}]\n[${err.message}]\x1b[0m`
+    );
+  }
+});
 
 module.exports = router;
