@@ -58,7 +58,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create a new tag
+// Create new tag
 // req.body example: { "tag_name": "black" }
 router.post("/", async (req, res) => {
   try {
