@@ -15,18 +15,18 @@ router.get("/", async (req, res) => {
       include: [Category, Tag],
     });
     if (!products) {
-      res.status(404).json("Error: No products found");
       console.error(`\x1b[33m[Error viewing all products: Not found]\x1b[0m`);
+      res.status(404).json("Error: No products found");
       throw new Error("No products found");
     }
     console.log(`\x1b[32m[Viewing all products]\x1b[0m`);
-    res.status(200).json(products);
     // Call helper function to format output for console table
     const tableData = formatAllProducts(products);
     console.table(tableData);
+    res.status(200).json(products);
   } catch (err) {
-    res.status(500).json(err);
     console.error(`\x1b[31m[Error finding all products: ${err}]\x1b[0m`);
+    res.status(500).json(err);
   }
 });
 
@@ -67,25 +67,46 @@ router.get("/:id", async (req, res) => {
       "product_name": "Basketball",
       "price": 100.00,
       "stock": 3,
-      "tagIds": [3, 7, 8]
+      "tagIds": [3, 7, 8],
+      "category_id": 4
     }
 */
+// NOTE: Fragile solution, requires all fields to be present & only works with bulkCreate for unknown reasons.
 router.post("/", async (req, res) => {
+  if (
+    !req.body.product_name ||
+    !req.body.price ||
+    !req.body.stock ||
+    !req.body.category_id
+  ) {
+    console.error(
+      `\x1b[31m[Error: Request must include product_name, price, stock and category_id]\x1b[0m`
+    );
+    res.status(400).json({
+      error: "Request must include product_name, price, stock and category_id",
+    });
+    return;
+  }
   try {
-    const product = await Product.create(req.body);
+    const product = await Product.bulkCreate([req.body]);
     if (req.body.tagIds.length) {
       const productTagIdArr = req.body.tagIds.map((tag_id) => {
         return {
-          product_id: product.id,
+          product_id: product[0].id,
           tag_id,
         };
       });
       await ProductTag.bulkCreate(productTagIdArr);
     }
+    console.log(
+      `\x1b[32m[Successfully created product ${product[0].id}: ${product[0].product_name}, in category ${product[0].category_id}]\x1b[0m`
+    );
     res.status(200).json(product);
   } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
+    console.error(
+      `\x1b[31m[Error creating a new product: ${err.name}]\n[${err.message}]\x1b[0m`
+    );
+    res.status(500).json(err);
   }
 });
 
@@ -95,7 +116,8 @@ router.post("/", async (req, res) => {
       "product_name": "Rob Zombie Vinyl Record",
       "price": 90.00,
       "stock": 2,
-      "tagIds": [1, 8]
+      "tagIds": [1, 8],
+      "category_id": 3
     }
 */
 router.put("/:id", async (req, res) => {
@@ -123,6 +145,7 @@ router.put("/:id", async (req, res) => {
     const [updatedCount] = await Product.update(
       { product_name: newName, price: newPrice, stock: newStock },
       {
+        include: [Category, Tag],
         where: {
           id: req.params.id,
         },
@@ -139,7 +162,12 @@ router.put("/:id", async (req, res) => {
         };
       });
       try {
-        await ProductTag.bulkCreate(productTagIdArr);
+        await ProductTag.bulkCreate({
+          include: [Tag, productTagIdArr],
+          where: {
+            product_id: req.params.id,
+          },
+        });
       } catch (err) {
         console.error(
           `\x1b[31m[Error updating product tags with id ${req.params.id}: ${err.name}]\n[${err.message}]\x1b[0m`
