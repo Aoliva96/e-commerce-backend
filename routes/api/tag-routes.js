@@ -1,5 +1,3 @@
-// NOTE: Future development - refactor error handling to be more reliable
-
 const router = require("express").Router();
 const { Tag, Product, ProductTag } = require("../../models");
 const { formatAllTags, formatSingleTag } = require("./helpers");
@@ -14,18 +12,23 @@ router.get("/", async (req, res) => {
       include: [{ model: Product, through: ProductTag }],
     });
     if (!tags) {
-      res.status(404).json("Error: No tags found");
       console.error(`\x1b[33m[Error viewing all tags: Not found]\x1b[0m`);
-      throw new Error("No tags found");
+      return res.status(404).json({ error: "No tags found" });
     }
+
+    // Log success message and formatted console table
     console.log(`\x1b[32m[Viewing all tags]\x1b[0m`);
-    res.status(200).json(tags);
-    // Call helper function to format output for console table
     const tableData = formatAllTags(tags);
     console.table(tableData);
+
+    // Send response
+    return res.status(200).json(tags);
   } catch (err) {
-    res.status(500).json(err);
-    console.error(`\x1b[31m[Error finding all products: ${err}]\x1b[0m`);
+    console.error(`\x1b[31m[Error viewing all tags: ${err}]\x1b[0m`);
+    res.status(500).json({
+      message: "Error viewing all tags",
+      error: `${err.name}, ${err.message}`,
+    });
   }
 });
 
@@ -39,39 +42,63 @@ router.get("/:id", async (req, res) => {
       include: [Product],
     });
     if (!tag) {
-      res.status(404).json(`Error: No tag found with id ${req.params.id}`);
       console.error(
-        `\x1b[33m[Error finding tag with id ${req.params.id}]\x1b[0m`
+        `\x1b[33m[Error viewing tag with id ${req.params.id}: Not found]\x1b[0m`
       );
-      throw new Error(`No tag found with id ${req.params.id}`);
+      return res
+        .status(404)
+        .json({ error: `No tag found with id ${req.params.id}` });
     }
-    res.status(200).json(tag);
+
+    // Log success message and formatted console table
     console.log(`\x1b[32m[Viewing tag ${tag.id}: ${tag.tag_name}]\x1b[0m`);
-    // Call helper function to format output for console table
     const tableData = formatSingleTag(tag);
     console.table(tableData);
+
+    // Send response
+    return res.status(200).json(tag);
   } catch (err) {
-    res.status(500).json(err);
     console.error(
-      `\x1b[31m[Error finding tag with id ${req.params.id}: ${err.name}]\n[${err.message}\x1b[0m`
+      `\x1b[31m[Error viewing tag with id ${req.params.id}: ${err.name}\n[${err.message}]\x1b[0m`
     );
+    return res.status(500).json({
+      message: `Error viewing tag with id ${req.params.id}`,
+      error: `${err.name}, ${err.message}`,
+    });
   }
 });
 
 // Create new tag
 // req.body example: { "tag_name": "black" }
 router.post("/", async (req, res) => {
+  if (!req.body.tag_name) {
+    console.error(
+      `\x1b[33m[Error: Request must include valid tag_name]\x1b[0m`
+    );
+    return res.status(400).json({
+      error: "Request must include valid tag_name",
+    });
+  }
+
   try {
+    // Create tag
     const newTag = await Tag.create(req.body);
-    res.status(200).json(newTag);
+
+    // Log success message
     console.log(
       `\x1b[32m[Successfully created tag ${newTag.id}: ${newTag.tag_name}]\x1b[0m`
     );
+
+    // Send response
+    return res.status(201).json(newTag);
   } catch (err) {
-    res.status(500).json(err);
     console.error(
-      `\x1b[31m[Error creating a new tag: ${err.name}]\n[${err.message}]\x1b[0m`
+      `\x1b[31m[Error creating new tag: ${err.name}]\n[${err.message}]\x1b[0m`
     );
+    return res.status(500).json({
+      message: "Error creating new tag",
+      error: `${err.name}, ${err.message}`,
+    });
   }
 });
 
@@ -80,44 +107,66 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     // Find tag to update
-    const tag = await Tag.findOne({
+    const originalTag = await Tag.findOne({
       where: {
         id: req.params.id,
       },
     });
-    if (!tag) {
-      res
-        .status(404)
-        .json(`Error: Could not find tag with id ${req.params.id}`);
+    if (!originalTag) {
       console.error(
-        `\x1b[31m[Error updating tag with id ${req.params.id}: Not found]\x1b[0m`
+        `\x1b[33m[Error updating tag with id ${req.params.id}: Not found]\x1b[0m`
       );
-      throw new Error(`No tag found with id ${req.params.id}`);
+      return res
+        .status(404)
+        .json(
+          `Error: Could not update tag with id ${req.params.id}: Not found`
+        );
     }
-    // Update tag name
-    const newName = req.body.tag_name;
-    const [updatedCount] = await Tag.update(
-      { tag_name: newName },
-      {
-        where: {
-          id: req.params.id,
-        },
-      }
-    );
-    if (updatedCount === 0) {
-      throw new Error(`tag_name ${newName} is invalid or already exists`);
-    }
-    res.status(200).json({
-      message: `Successfully updated tag ${req.params.id}, ${tag.tag_name} to ${newName}`,
+
+    // Update tag
+    const updatedCount = await Tag.update(req.body, {
+      where: {
+        id: req.params.id,
+      },
+      returning: true,
     });
+
+    // Check for no change to tag
+    if (updatedCount[1] === 0) {
+      console.error(
+        `\x1b[33m[Error updating tag with id ${req.params.id}: Request invalid or already exists]\x1b[0m`
+      );
+      return res.status(400).json({
+        error: `Request is invalid or already exists`,
+      });
+    }
+
+    // Collect updated tag data
+    const updatedTag = await Tag.findOne({
+      where: {
+        id: req.params.id,
+      },
+    });
+
+    // Log success message
     console.log(
-      `\x1b[32m[Successfully updated tag ${req.params.id}]\n[${tag.tag_name} > ${newName}]\x1b[0m`
+      `\x1b[32m[Successfully updated tag ${req.params.id}]\n[Name: ${originalTag.tag_name} > ${updatedTag.tag_name}]\x1b[0m`
     );
+
+    // Send response
+    return res.status(200).json({
+      message: `Successfully updated tag ${req.params.id}`,
+      update: updatedTag,
+      original: originalTag,
+    });
   } catch (err) {
-    res.status(500).json(`${err}`);
     console.error(
-      `\x1b[31m[Error updating tag with id ${req.params.id}]\n[${err.message}]\x1b[0m`
+      `\x1b[31m[Error updating tag with id ${req.params.id}: ${err.name}]\n[${err.message}]\x1b[0m`
     );
+    return res.status(500).json({
+      message: `Error updating tag with id ${req.params.id}`,
+      error: `${err.name}, ${err.message}`,
+    });
   }
 });
 
@@ -131,34 +180,38 @@ router.delete("/:id", async (req, res) => {
       },
     });
     if (!tag) {
-      res
-        .status(404)
-        .json(`Error: Could not find tag with id ${req.params.id}`);
       console.error(
-        `\x1b[31m[Error deleting tag with id ${req.params.id}: Not found]\x1b[0m`
+        `\x1b[33m[Error deleting tag with id ${req.params.id}: Not found]\x1b[0m`
       );
-      throw new Error(`No tag found with id ${req.params.id}`);
+      return res.status(404).json({
+        error: `Could not delete tag with id ${req.params.id}: Not found`,
+      });
     }
+
     // Delete tag
-    const deletedTag = await Tag.destroy({
+    await Tag.destroy({
       where: {
         id: tag.id,
       },
     });
-    if (!deletedTag) {
-      throw err;
-    }
-    res.status(200).json({
-      message: `Successfully deleted tag ${req.params.id}, ${tag.tag_name}`,
-    });
+
+    // Log success message
     console.log(
       `\x1b[32m[Successfully deleted tag ${req.params.id}: ${tag.tag_name}]\x1b[0m`
     );
+
+    // Send response
+    return res.status(200).json({
+      message: `Successfully deleted tag ${req.params.id}, ${tag.tag_name}`,
+    });
   } catch (err) {
-    res.status(500).json(`${err}`);
     console.error(
       `\x1b[31m[Error deleting tag with id ${req.params.id}: ${err.name}]\n[${err.message}]\x1b[0m`
     );
+    return res.status(500).json({
+      message: `Error deleting tag with id ${req.params.id}`,
+      error: `${err.name}, ${err.message}`,
+    });
   }
 });
 
