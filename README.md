@@ -59,9 +59,9 @@ I addressed the above problems in the following way:
 
 ## Deployment
 
-Click the demo link below to see a short example of the project's functionality:
+Click the demo link below to see a short example of the project's functionality and intended usage:
 
-[Demo video link](#)
+[Link to demo video for this project](https://drive.google.com/file/d/1JGFLwuLY55Ke_t0Ek8nNC6UB1yW-UzGX/view?usp=sharing)
 
 [Link to the GitHub repo for this project](https://github.com/Aoliva96/e-commerce-backend)
 
